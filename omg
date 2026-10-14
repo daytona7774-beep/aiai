@@ -3,6 +3,15 @@
 -- Für Roblox Studio: als LocalScript ausführen
 --==================================================
 
+-- Diese Version ist für Roblox Luau als LocalScript gedacht.
+-- In einer normalen Roblox-Umgebung sind game und Instance vorhanden.
+if game == nil then
+    error("Arcane UI: Roblox-Umgebung nicht gefunden. Bitte in Roblox Studio als LocalScript ausführen.")
+end
+if Instance == nil or type(Instance.new) ~= "function" then
+    error("Arcane UI: Instance.new ist nicht verfügbar. Das Script läuft nicht in einer vollständigen Roblox-Luau-Umgebung; eine GUI kann dort nicht erstellt werden.")
+end
+
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
@@ -31,21 +40,16 @@ Arcane.Theme = {
 local T = Arcane.Theme
 
 local function create(className, properties, parent)
-    assert(
-        Instance ~= nil,
-        "Instance ist nil: Dieses Script muss in einer Roblox-LuaU-Umgebung laufen."
-    )
-
+    assert(type(className) == "string", "Arcane UI: className muss ein String sein.")
     local object = Instance.new(className)
 
     for key, value in pairs(properties or {}) do
         object[key] = value
     end
 
-    if parent then
+    if parent ~= nil then
         object.Parent = parent
     end
-
     return object
 end
 
