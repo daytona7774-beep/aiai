@@ -1,4 +1,3 @@
-
 --==================================================
 -- ARCANE UI - FIXED STANDALONE VERSION
 -- Für Roblox Studio: als LocalScript ausführen
@@ -130,8 +129,6 @@ function Arcane.new(options)
         ResetOnSpawn = false,
         IgnoreGuiInset = true,
 
-        -- Sibling wurde entfernt:
-        ZIndexBehavior = Enum.ZIndexBehavior.Global
     }, playerGui)
 
     local main = create("Frame", {
