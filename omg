@@ -1,85 +1,75 @@
 
---[[
-    ARCANE UI - STANDALONE EDITION
-    Vollständige UI-Bibliothek in einer Datei.
-    Enthält: Window, Tabs, Sections, Toggle, Button,
-    TextBox, Slider, Dropdown, Keybind und Notifications.
-    Keine Spielmanipulation.
-]]
+--==================================================
+-- ARCANE UI - STANDALONE
+-- Roblox LocalScript
+--==================================================
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
-local LocalPlayer = Players.LocalPlayer
-local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local player = Players.LocalPlayer
+if not player then
+    error("Arcane UI muss in einem LocalScript laufen.")
+end
+
+local playerGui = player:WaitForChild("PlayerGui")
 
 local Arcane = {}
 Arcane.__index = Arcane
 
 Arcane.Theme = {
     Background = Color3.fromRGB(17, 18, 25),
-    Sidebar = Color3.fromRGB(21, 22, 31),
-    Panel = Color3.fromRGB(27, 29, 40),
-    Element = Color3.fromRGB(35, 37, 51),
+    Sidebar = Color3.fromRGB(22, 23, 32),
+    Panel = Color3.fromRGB(28, 30, 41),
+    Element = Color3.fromRGB(38, 40, 54),
     Accent = Color3.fromRGB(139, 92, 246),
     Text = Color3.fromRGB(240, 240, 250),
     Muted = Color3.fromRGB(155, 158, 180),
-    Border = Color3.fromRGB(52, 54, 72),
-    Success = Color3.fromRGB(80, 200, 130),
-    Danger = Color3.fromRGB(235, 85, 100)
+    Border = Color3.fromRGB(53, 55, 73)
 }
 
-local Theme = Arcane.Theme
+local T = Arcane.Theme
 
-local function Create(className, properties, parent)
+local function create(className, props, parent)
     local object = Instance.new(className)
 
-    for property, value in pairs(properties or {}) do
-        object[property] = value
+    for key, value in pairs(props or {}) do
+        object[key] = value
     end
 
     object.Parent = parent
     return object
 end
 
-local function Corner(parent, radius)
-    return Create("UICorner", {
+local function corner(object, radius)
+    create("UICorner", {
         CornerRadius = UDim.new(0, radius or 8)
-    }, parent)
+    }, object)
 end
 
-local function Stroke(parent, color, transparency)
-    return Create("UIStroke", {
-        Color = color or Theme.Border,
-        Transparency = transparency or 0,
+local function stroke(object)
+    create("UIStroke", {
+        Color = T.Border,
         Thickness = 1
-    }, parent)
+    }, object)
 end
 
-local function Padding(parent, amount)
-    return Create("UIPadding", {
+local function padding(object, amount)
+    create("UIPadding", {
         PaddingLeft = UDim.new(0, amount),
         PaddingRight = UDim.new(0, amount),
         PaddingTop = UDim.new(0, amount),
         PaddingBottom = UDim.new(0, amount)
-    }, parent)
+    }, object)
 end
 
-local function Animate(object, properties, duration)
-    TweenService:Create(
-        object,
-        TweenInfo.new(duration or 0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-        properties
-    ):Play()
-end
-
-local function MakeLabel(parent, text, size, color, font)
-    return Create("TextLabel", {
+local function label(parent, text, size, color, font)
+    return create("TextLabel", {
         BackgroundTransparency = 1,
         Text = text or "",
         TextSize = size or 13,
-        TextColor3 = color or Theme.Text,
+        TextColor3 = color or T.Text,
         Font = font or Enum.Font.Gotham,
         TextXAlignment = Enum.TextXAlignment.Left,
         TextYAlignment = Enum.TextYAlignment.Center,
@@ -87,130 +77,139 @@ local function MakeLabel(parent, text, size, color, font)
     }, parent)
 end
 
-local function MakeButton(parent, text, size, color)
-    local button = Create("TextButton", {
+local function button(parent, text, size)
+    local b = create("TextButton", {
         AutoButtonColor = false,
         Text = text or "",
-        TextSize = 13,
+        TextSize = 12,
         Font = Enum.Font.GothamMedium,
-        TextColor3 = Theme.Text,
-        BackgroundColor3 = color or Theme.Element,
+        TextColor3 = T.Text,
+        BackgroundColor3 = T.Element,
         Size = size,
         BorderSizePixel = 0
     }, parent)
 
-    Corner(button, 7)
+    corner(b, 7)
 
-    button.MouseEnter:Connect(function()
-        Animate(button, {
-            BackgroundColor3 = Theme.Accent
-        })
+    b.MouseEnter:Connect(function()
+        TweenService:Create(b, TweenInfo.new(0.15), {
+            BackgroundColor3 = T.Accent
+        }):Play()
     end)
 
-    button.MouseLeave:Connect(function()
-        Animate(button, {
-            BackgroundColor3 = color or Theme.Element
-        })
+    b.MouseLeave:Connect(function()
+        TweenService:Create(b, TweenInfo.new(0.15), {
+            BackgroundColor3 = T.Element
+        }):Play()
     end)
 
-    return button
+    return b
 end
 
--- Fenster erstellen
+--==================================================
+-- WINDOW
+--==================================================
+
 function Arcane.new(options)
     options = options or {}
 
     local self = setmetatable({}, Arcane)
     self.Tabs = {}
-    self.ActiveTab = nil
     self.Connections = {}
+    self.ActiveTab = nil
     self.Destroyed = false
 
-    local gui = Create("ScreenGui", {
+    local old = playerGui:FindFirstChild(options.Name or "ArcaneUI")
+    if old then
+        old:Destroy()
+    end
+
+    self.Gui = create("ScreenGui", {
         Name = options.Name or "ArcaneUI",
         ResetOnSpawn = false,
+        IgnoreGuiInset = true,
         ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    }, PlayerGui)
+    }, playerGui)
 
-    self.Gui = gui
-
-    local main = Create("Frame", {
+    local main = create("Frame", {
         Name = "Main",
         Size = options.Size or UDim2.fromOffset(760, 490),
         Position = UDim2.new(0.5, -380, 0.5, -245),
-        BackgroundColor3 = Theme.Background,
+        BackgroundColor3 = T.Background,
         BorderSizePixel = 0,
         ClipsDescendants = true
-    }, gui)
+    }, self.Gui)
 
     self.Main = main
-    Corner(main, 12)
-    Stroke(main, Theme.Border)
+    corner(main, 12)
+    stroke(main)
 
-    -- Kopfzeile
-    local topbar = Create("Frame", {
+    local topbar = create("Frame", {
         Name = "Topbar",
-        Size = UDim2.new(1, 0, 0, 54),
-        BackgroundColor3 = Theme.Panel,
+        Size = UDim2.new(1, 0, 0, 55),
+        BackgroundColor3 = T.Panel,
         BorderSizePixel = 0
     }, main)
 
-    MakeLabel(topbar, "  ✦  " .. (options.Title or "ARCANE"), 17,
-        Theme.Text, Enum.Font.GothamBold)
+    local title = label(
+        topbar,
+        "  ✦  " .. (options.Title or "ARCANE"),
+        16,
+        T.Text,
+        Enum.Font.GothamBold
+    )
+    title.Position = UDim2.fromOffset(0, -5)
 
-    local subtitle = Create("TextLabel", {
+    local subtitle = create("TextLabel", {
         BackgroundTransparency = 1,
-        Position = UDim2.new(0, 18, 0, 29),
-        Size = UDim2.new(1, -90, 0, 15),
-        Text = options.Subtitle or "UI Framework",
+        Position = UDim2.fromOffset(18, 28),
+        Size = UDim2.new(1, -75, 0, 16),
+        Text = options.Subtitle or "Custom Interface",
         TextSize = 10,
-        TextColor3 = Theme.Muted,
+        TextColor3 = T.Muted,
         Font = Enum.Font.Gotham,
         TextXAlignment = Enum.TextXAlignment.Left
     }, topbar)
 
-    local close = MakeButton(topbar, "×",
-        UDim2.fromOffset(34, 32), Theme.Panel)
-    close.Position = UDim2.new(1, -43, 0, 11)
+    local close = button(topbar, "×", UDim2.fromOffset(32, 32))
+    close.Position = UDim2.new(1, -42, 0, 11)
     close.TextSize = 22
 
     close.MouseButton1Click:Connect(function()
         self:Destroy()
     end)
 
-    -- Sidebar
-    local sidebar = Create("Frame", {
+    local sidebar = create("Frame", {
         Name = "Sidebar",
-        Position = UDim2.new(0, 0, 0, 54),
-        Size = UDim2.new(0, 175, 1, -54),
-        BackgroundColor3 = Theme.Sidebar,
+        Position = UDim2.fromOffset(0, 55),
+        Size = UDim2.new(0, 170, 1, -55),
+        BackgroundColor3 = T.Sidebar,
         BorderSizePixel = 0
     }, main)
 
-    Padding(sidebar, 12)
+    padding(sidebar, 10)
 
-    local tabList = Create("ScrollingFrame", {
+    local tabList = create("ScrollingFrame", {
         Name = "TabList",
-        BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 1, 0),
-        CanvasSize = UDim2.new(),
-        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
         ScrollBarThickness = 3,
-        ScrollBarImageColor3 = Theme.Accent,
-        BorderSizePixel = 0
+        ScrollBarImageColor3 = T.Accent,
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+        AutomaticCanvasSize = Enum.AutomaticSize.Y
     }, sidebar)
 
-    Create("UIListLayout", {
+    create("UIListLayout", {
         Padding = UDim.new(0, 7),
         SortOrder = Enum.SortOrder.LayoutOrder
     }, tabList)
 
-    -- Inhaltsbereich
-    local content = Create("Frame", {
+    local content = create("Frame", {
         Name = "Content",
-        Position = UDim2.new(0, 175, 0, 54),
-        Size = UDim2.new(1, -175, 1, -54),
-        BackgroundColor3 = Theme.Background,
+        Position = UDim2.new(0, 170, 0, 55),
+        Size = UDim2.new(1, -170, 1, -55),
+        BackgroundColor3 = T.Background,
         BorderSizePixel = 0,
         ClipsDescendants = true
     }, main)
@@ -220,19 +219,35 @@ function Arcane.new(options)
 
     -- Fenster verschieben
     local dragging = false
+    local dragInput
     local dragStart
     local startPosition
 
     topbar.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+
             dragging = true
             dragStart = input.Position
             startPosition = main.Position
+
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
         end
     end)
 
-    local dragConnection = UserInputService.InputChanged:Connect(function(input)
-        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+    topbar.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement
+            or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+
+    local moveConnection = UserInputService.InputChanged:Connect(function(input)
+        if dragging and input == dragInput then
             local delta = input.Position - dragStart
 
             main.Position = UDim2.new(
@@ -244,72 +259,59 @@ function Arcane.new(options)
         end
     end)
 
-    local releaseConnection = UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = false
-        end
-    end)
-
-    table.insert(self.Connections, dragConnection)
-    table.insert(self.Connections, releaseConnection)
+    table.insert(self.Connections, moveConnection)
 
     return self
 end
 
--- Tab auswählen
-function Arcane:SelectTab(tab)
-    self.ActiveTab = tab
+--==================================================
+-- TAB
+--==================================================
 
-    for _, item in ipairs(self.Tabs) do
-        item.Page.Visible = item == tab
-        Animate(item.Button, {
-            BackgroundColor3 = item == tab and Theme.Accent or Theme.Element,
-            TextColor3 = Theme.Text
-        })
+function Arcane:SelectTab(selected)
+    self.ActiveTab = selected
+
+    for _, tab in ipairs(self.Tabs) do
+        tab.Page.Visible = (tab == selected)
+        tab.Button.BackgroundColor3 =
+            tab == selected and T.Accent or T.Element
     end
 end
 
--- Neuen Tab erstellen
 function Arcane:CreateTab(name)
     local tab = {
         Name = name,
-        Sections = {}
+        Sections = {},
+        Window = self
     }
 
-    local button = MakeButton(
+    tab.Button = button(
         self.TabList,
         "   " .. name,
-        UDim2.new(1, 0, 0, 37),
-        Theme.Element
+        UDim2.new(1, 0, 0, 36)
     )
+    tab.Button.TextXAlignment = Enum.TextXAlignment.Left
 
-    button.TextXAlignment = Enum.TextXAlignment.Left
-    button.TextSize = 12
-
-    local page = Create("ScrollingFrame", {
+    tab.Page = create("ScrollingFrame", {
         Name = name .. "Page",
         Size = UDim2.new(1, 0, 1, 0),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
         ScrollBarThickness = 4,
-        ScrollBarImageColor3 = Theme.Accent,
-        CanvasSize = UDim2.new(),
+        ScrollBarImageColor3 = T.Accent,
+        CanvasSize = UDim2.new(0, 0, 0, 0),
         AutomaticCanvasSize = Enum.AutomaticSize.Y,
         Visible = false
     }, self.Content)
 
-    Padding(page, 16)
+    padding(tab.Page, 14)
 
-    Create("UIListLayout", {
-        Padding = UDim.new(0, 13),
+    create("UIListLayout", {
+        Padding = UDim.new(0, 12),
         SortOrder = Enum.SortOrder.LayoutOrder
-    }, page)
+    }, tab.Page)
 
-    tab.Button = button
-    tab.Page = page
-    tab.Window = self
-
-    button.MouseButton1Click:Connect(function()
+    tab.Button.MouseButton1Click:Connect(function()
         self:SelectTab(tab)
     end)
 
@@ -319,35 +321,40 @@ function Arcane:CreateTab(name)
         self:SelectTab(tab)
     end
 
-    function tab:CreateSection(title)
+    --==================================================
+    -- SECTION
+    --==================================================
+
+    function tab:CreateSection(sectionName)
         local section = {
-            Name = title,
+            Name = sectionName,
             Tab = self
         }
 
-        local frame = Create("Frame", {
-            Name = title,
-            Size = UDim2.new(1, -2, 0, 45),
+        local frame = create("Frame", {
+            Name = sectionName,
+            Size = UDim2.new(1, -4, 0, 40),
             AutomaticSize = Enum.AutomaticSize.Y,
-            BackgroundColor3 = Theme.Panel,
+            BackgroundColor3 = T.Panel,
             BorderSizePixel = 0
         }, self.Page)
 
-        Corner(frame, 9)
-        Stroke(frame, Theme.Border)
-        Padding(frame, 12)
+        corner(frame, 9)
+        stroke(frame)
+        padding(frame, 12)
 
-        local layout = Create("UIListLayout", {
-            Padding = UDim.new(0, 9),
+        create("UIListLayout", {
+            Padding = UDim.new(0, 8),
             SortOrder = Enum.SortOrder.LayoutOrder
         }, frame)
 
-        local heading = Create("TextLabel", {
-            BackgroundTransparency = 1,
+        local heading = create("TextLabel", {
+            Name = "Heading",
             Size = UDim2.new(1, 0, 0, 24),
-            Text = title,
+            BackgroundTransparency = 1,
+            Text = sectionName,
             TextSize = 14,
-            TextColor3 = Theme.Text,
+            TextColor3 = T.Text,
             Font = Enum.Font.GothamBold,
             TextXAlignment = Enum.TextXAlignment.Left,
             LayoutOrder = 0
@@ -355,108 +362,99 @@ function Arcane:CreateTab(name)
 
         section.Frame = frame
 
-        local function Row(height)
-            local row = Create("Frame", {
-                Size = UDim2.new(1, 0, 0, height or 34),
+        local function makeRow(height, order)
+            return create("Frame", {
+                Size = UDim2.new(1, 0, 0, height),
                 BackgroundTransparency = 1,
-                BorderSizePixel = 0
+                BorderSizePixel = 0,
+                LayoutOrder = order or 1
             }, frame)
-
-            return row
         end
 
-        -- Toggle
-        function section:AddToggle(label, default, callback)
-            local row = Row(34)
-            local text = MakeLabel(row, label, 12, Theme.Text)
-            text.Size = UDim2.new(1, -55, 1, 0)
+        -- TOGGLE
+        function section:AddToggle(text, default, callback)
+            local row = makeRow(32)
+            local caption = label(row, text, 12, T.Text)
+            caption.Size = UDim2.new(1, -55, 1, 0)
 
-            local toggle = Create("TextButton", {
-                Size = UDim2.fromOffset(42, 23),
+            local switch = create("TextButton", {
+                Size = UDim2.fromOffset(42, 22),
                 Position = UDim2.new(1, -42, 0.5, -11),
-                BackgroundColor3 = Theme.Element,
+                BackgroundColor3 = T.Element,
                 Text = "",
                 AutoButtonColor = false,
                 BorderSizePixel = 0
             }, row)
 
-            Corner(toggle, 12)
+            corner(switch, 11)
 
-            local knob = Create("Frame", {
-                Size = UDim2.fromOffset(17, 17),
+            local knob = create("Frame", {
+                Size = UDim2.fromOffset(16, 16),
                 Position = UDim2.new(0, 3, 0.5, -8),
-                BackgroundColor3 = Theme.Text,
+                BackgroundColor3 = T.Text,
                 BorderSizePixel = 0
-            }, toggle)
+            }, switch)
 
-            Corner(knob, 10)
+            corner(knob, 9)
 
             local value = default == true
 
-            local function update()
-                Animate(toggle, {
-                    BackgroundColor3 = value and Theme.Accent or Theme.Element
-                })
+            local function update(notify)
+                switch.BackgroundColor3 = value and T.Accent or T.Element
+                knob.Position = value
+                    and UDim2.new(1, -19, 0.5, -8)
+                    or UDim2.new(0, 3, 0.5, -8)
 
-                Animate(knob, {
-                    Position = value
-                        and UDim2.new(1, -20, 0.5, -8)
-                        or UDim2.new(0, 3, 0.5, -8)
-                })
-
-                if callback then
+                if notify and callback then
                     callback(value)
                 end
             end
 
-            toggle.MouseButton1Click:Connect(function()
+            switch.MouseButton1Click:Connect(function()
                 value = not value
-                update()
+                update(true)
             end)
 
-            update()
+            update(false)
 
             return {
-                Get = function() return value end,
+                Get = function()
+                    return value
+                end,
                 Set = function(newValue)
                     value = newValue == true
-                    update()
+                    update(true)
                 end
             }
         end
 
-        -- Button
-        function section:AddButton(label, callback)
-            local button = MakeButton(
-                frame,
-                label,
-                UDim2.new(1, 0, 0, 35),
-                Theme.Element
-            )
+        -- BUTTON
+        function section:AddButton(text, callback)
+            local b = button(frame, text, UDim2.new(1, 0, 0, 34))
+            b.LayoutOrder = 10
 
-            button.LayoutOrder = 100
-            button.MouseButton1Click:Connect(function()
+            b.MouseButton1Click:Connect(function()
                 if callback then
                     callback()
                 end
             end)
 
-            return button
+            return b
         end
 
-        -- TextBox
-        function section:AddTextBox(label, placeholder, callback)
-            local row = Row(58)
+        -- TEXTBOX
+        function section:AddTextBox(text, placeholder, callback)
+            local row = makeRow(58)
 
-            local text = MakeLabel(row, label, 12, Theme.Text)
-            text.Size = UDim2.new(1, 0, 0, 21)
+            local caption = label(row, text, 12, T.Text)
+            caption.Size = UDim2.new(1, 0, 0, 20)
 
-            local input = Create("TextBox", {
-                Position = UDim2.new(0, 0, 0, 25),
+            local input = create("TextBox", {
+                Position = UDim2.fromOffset(0, 24),
                 Size = UDim2.new(1, 0, 0, 32),
-                BackgroundColor3 = Theme.Element,
-                TextColor3 = Theme.Text,
-                PlaceholderColor3 = Theme.Muted,
+                BackgroundColor3 = T.Element,
+                TextColor3 = T.Text,
+                PlaceholderColor3 = T.Muted,
                 PlaceholderText = placeholder or "Text eingeben...",
                 Text = "",
                 TextSize = 12,
@@ -465,8 +463,8 @@ function Arcane:CreateTab(name)
                 BorderSizePixel = 0
             }, row)
 
-            Corner(input, 6)
-            Padding(input, 8)
+            corner(input, 6)
+            padding(input, 8)
 
             input.FocusLost:Connect(function(enterPressed)
                 if callback then
@@ -477,161 +475,189 @@ function Arcane:CreateTab(name)
             return input
         end
 
-        -- Slider
-        function section:AddSlider(label, minValue, maxValue, defaultValue, callback)
+        -- SLIDER
+        function section:AddSlider(text, minValue, maxValue, defaultValue, callback)
             minValue = minValue or 0
             maxValue = maxValue or 100
-            defaultValue = math.clamp(defaultValue or minValue, minValue, maxValue)
+            defaultValue = math.clamp(
+                defaultValue or minValue,
+                minValue,
+                maxValue
+            )
 
-            local row = Row(56)
+            local row = makeRow(54)
 
-            local title = MakeLabel(row, label, 12, Theme.Text)
-            title.Size = UDim2.new(0.75, 0, 0, 22)
+            local caption = label(row, text, 12, T.Text)
+            caption.Size = UDim2.new(0.75, 0, 0, 22)
 
-            local valueLabel = Create("TextLabel", {
-                BackgroundTransparency = 1,
+            local number = create("TextLabel", {
                 Position = UDim2.new(0.75, 0, 0, 0),
                 Size = UDim2.new(0.25, 0, 0, 22),
+                BackgroundTransparency = 1,
                 Text = tostring(defaultValue),
-                TextColor3 = Theme.Accent,
+                TextColor3 = T.Accent,
                 TextSize = 12,
                 Font = Enum.Font.GothamBold,
                 TextXAlignment = Enum.TextXAlignment.Right
             }, row)
 
-            local bar = Create("Frame", {
-                Position = UDim2.new(0, 0, 0, 34),
-                Size = UDim2.new(1, 0, 0, 7),
-                BackgroundColor3 = Theme.Element,
+            local bar = create("TextButton", {
+                Position = UDim2.fromOffset(0, 31),
+                Size = UDim2.new(1, 0, 0, 8),
+                BackgroundColor3 = T.Element,
+                Text = "",
+                AutoButtonColor = false,
                 BorderSizePixel = 0
             }, row)
 
-            Corner(bar, 5)
+            corner(bar, 4)
 
-            local fill = Create("Frame", {
-                Size = UDim2.new(
-                    (defaultValue - minValue) / math.max(maxValue - minValue, 1),
-                    0, 1, 0
-                ),
-                BackgroundColor3 = Theme.Accent,
+            local fill = create("Frame", {
+                Size = UDim2.new(0, 0, 1, 0),
+                BackgroundColor3 = T.Accent,
                 BorderSizePixel = 0
             }, bar)
 
-            Corner(fill, 5)
+            corner(fill, 4)
 
             local value = defaultValue
             local sliding = false
 
-            local function setFromX(x)
-                local ratio = math.clamp(
-                    (x - bar.AbsolutePosition.X) / bar.AbsoluteSize.X,
-                    0, 1
+            local function setValue(newValue, notify)
+                value = math.clamp(
+                    math.floor(newValue + 0.5),
+                    minValue,
+                    maxValue
                 )
 
-                value = math.floor(minValue + ratio * (maxValue - minValue) + 0.5)
+                local ratio = (value - minValue) /
+                    math.max(maxValue - minValue, 1)
 
                 fill.Size = UDim2.new(ratio, 0, 1, 0)
-                valueLabel.Text = tostring(value)
+                number.Text = tostring(value)
 
-                if callback then
+                if notify and callback then
                     callback(value)
                 end
             end
 
+            local function fromX(x)
+                local width = math.max(bar.AbsoluteSize.X, 1)
+                local ratio = math.clamp(
+                    (x - bar.AbsolutePosition.X) / width,
+                    0,
+                    1
+                )
+
+                setValue(
+                    minValue + ratio * (maxValue - minValue),
+                    true
+                )
+            end
+
             bar.InputBegan:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                if input.UserInputType == Enum.UserInputType.MouseButton1
+                    or input.UserInputType == Enum.UserInputType.Touch then
                     sliding = true
-                    setFromX(input.Position.X)
+                    fromX(input.Position.X)
                 end
             end)
 
-            local moveConnection = UserInputService.InputChanged:Connect(function(input)
-                if sliding and input.UserInputType == Enum.UserInputType.MouseMovement then
-                    setFromX(input.Position.X)
+            local move = UserInputService.InputChanged:Connect(function(input)
+                if sliding and (
+                    input.UserInputType == Enum.UserInputType.MouseMovement
+                    or input.UserInputType == Enum.UserInputType.Touch
+                ) then
+                    fromX(input.Position.X)
                 end
             end)
 
-            local endConnection = UserInputService.InputEnded:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            local finish = UserInputService.InputEnded:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1
+                    or input.UserInputType == Enum.UserInputType.Touch then
                     sliding = false
                 end
             end)
 
-            table.insert(self.Tab.Window.Connections, moveConnection)
-            table.insert(self.Tab.Window.Connections, endConnection)
+            table.insert(self.Window.Connections, move)
+            table.insert(self.Window.Connections, finish)
+
+            setValue(defaultValue, false)
 
             return {
-                Get = function() return value end,
+                Get = function()
+                    return value
+                end,
                 Set = function(newValue)
-                    value = math.clamp(newValue, minValue, maxValue)
-                    local ratio = (value - minValue) / math.max(maxValue - minValue, 1)
-                    fill.Size = UDim2.new(ratio, 0, 1, 0)
-                    valueLabel.Text = tostring(value)
-                    if callback then callback(value) end
+                    setValue(newValue, true)
                 end
             }
         end
 
-        -- Dropdown
-        function section:AddDropdown(label, options, callback)
+        -- DROPDOWN
+        function section:AddDropdown(text, options, callback)
             options = options or {}
 
-            local row = Row(62)
+            local row = makeRow(61)
 
-            local title = MakeLabel(row, label, 12, Theme.Text)
-            title.Size = UDim2.new(1, 0, 0, 22)
+            local caption = label(row, text, 12, T.Text)
+            caption.Size = UDim2.new(1, 0, 0, 20)
 
-            local selected = options[1] or "Keine Optionen"
+            local selected = options[1]
 
-            local button = MakeButton(
+            local drop = button(
                 row,
-                tostring(selected) .. "  ▾",
-                UDim2.new(1, 0, 0, 34),
-                Theme.Element
+                selected and tostring(selected) or "Option wählen",
+                UDim2.new(1, 0, 0, 32)
             )
 
-            button.Position = UDim2.new(0, 0, 0, 25)
-            button.TextXAlignment = Enum.TextXAlignment.Left
-            Padding(button, 8)
+            drop.Position = UDim2.fromOffset(0, 24)
+            drop.TextXAlignment = Enum.TextXAlignment.Left
 
-            local menu = Create("Frame", {
-                Position = UDim2.new(0, 0, 0, 61),
+            local menu = create("Frame", {
+                Position = UDim2.new(0, 0, 0, 59),
                 Size = UDim2.new(1, 0, 0, 0),
-                BackgroundColor3 = Theme.Background,
+                BackgroundColor3 = T.Background,
                 BorderSizePixel = 0,
-                ClipsDescendants = true,
                 Visible = false,
+                ClipsDescendants = true,
                 ZIndex = 5
             }, row)
 
-            Corner(menu, 6)
-            Stroke(menu, Theme.Border)
+            corner(menu, 6)
+            stroke(menu)
 
-            local list = Create("UIListLayout", {
-                Padding = UDim.new(0, 3)
+            local menuLayout = create("UIListLayout", {
+                Padding = UDim.new(0, 3),
+                SortOrder = Enum.SortOrder.LayoutOrder
             }, menu)
 
-            local function rebuild()
+            local function clearOptions()
                 for _, child in ipairs(menu:GetChildren()) do
                     if child:IsA("TextButton") then
                         child:Destroy()
                     end
                 end
+            end
+
+            local function rebuild()
+                clearOptions()
 
                 for _, option in ipairs(options) do
-                    local optionButton = MakeButton(
+                    local optionButton = button(
                         menu,
                         tostring(option),
-                        UDim2.new(1, 0, 0, 28),
-                        Theme.Element
+                        UDim2.new(1, 0, 0, 28)
                     )
 
                     optionButton.ZIndex = 6
+
                     optionButton.MouseButton1Click:Connect(function()
                         selected = option
-                        button.Text = tostring(option) .. "  ▾"
+                        drop.Text = tostring(option)
                         menu.Visible = false
                         menu.Size = UDim2.new(1, 0, 0, 0)
+                        row.Size = UDim2.new(1, 0, 0, 61)
 
                         if callback then
                             callback(option)
@@ -642,92 +668,103 @@ function Arcane:CreateTab(name)
 
             rebuild()
 
-            button.MouseButton1Click:Connect(function()
+            drop.MouseButton1Click:Connect(function()
                 menu.Visible = not menu.Visible
 
                 if menu.Visible then
-                    menu.Size = UDim2.new(1, 0, 0, math.min(#options * 31, 155))
-                    row.Size = UDim2.new(1, 0, 0, 67 + math.min(#options * 31, 155))
+                    local height = math.min(#options * 31, 155)
+                    menu.Size = UDim2.new(1, 0, 0, height)
+                    row.Size = UDim2.new(1, 0, 0, 67 + height)
                 else
                     menu.Size = UDim2.new(1, 0, 0, 0)
-                    row.Size = UDim2.new(1, 0, 0, 62)
+                    row.Size = UDim2.new(1, 0, 0, 61)
                 end
             end)
 
             return {
-                Get = function() return selected end,
+                Get = function()
+                    return selected
+                end,
+
                 Set = function(newValue)
                     for _, option in ipairs(options) do
                         if option == newValue then
                             selected = newValue
-                            button.Text = tostring(selected) .. "  ▾"
-                            if callback then callback(selected) end
-                            break
+                            drop.Text = tostring(newValue)
+
+                            if callback then
+                                callback(newValue)
+                            end
+
+                            return
                         end
                     end
                 end,
+
                 Refresh = function(newOptions)
                     options = newOptions or {}
-                    selected = options[1] or "Keine Optionen"
-                    button.Text = tostring(selected) .. "  ▾"
+                    selected = options[1]
+                    drop.Text = selected and tostring(selected) or "Option wählen"
                     rebuild()
                 end
             }
         end
 
-        -- Keybind
-        function section:AddKeybind(label, defaultKey, callback)
-            local row = Row(34)
+        -- KEYBIND
+        function section:AddKeybind(text, defaultKey, callback)
+            local row = makeRow(34)
 
-            local title = MakeLabel(row, label, 12, Theme.Text)
-            title.Size = UDim2.new(1, -100, 1, 0)
+            local caption = label(row, text, 12, T.Text)
+            caption.Size = UDim2.new(1, -105, 1, 0)
 
             local keyName = defaultKey or "RightShift"
 
-            local button = MakeButton(
+            local keyButton = button(
                 row,
                 keyName,
-                UDim2.fromOffset(95, 30),
-                Theme.Element
+                UDim2.fromOffset(100, 30)
             )
 
-            button.Position = UDim2.new(1, -95, 0, 2)
+            keyButton.Position = UDim2.new(1, -100, 0, 2)
+
             local listening = false
 
-            button.MouseButton1Click:Connect(function()
+            keyButton.MouseButton1Click:Connect(function()
                 listening = true
-                button.Text = "Taste drücken..."
+                keyButton.Text = "Taste drücken..."
             end)
 
-            local connection = UserInputService.InputBegan:Connect(function(input, processed)
-                if processed then return end
+            local connection = UserInputService.InputBegan:Connect(function(input)
+                if input.UserInputType ~= Enum.UserInputType.Keyboard then
+                    return
+                end
 
-                if listening and input.UserInputType == Enum.UserInputType.Keyboard then
+                if listening then
                     keyName = input.KeyCode.Name
-                    button.Text = keyName
+                    keyButton.Text = keyName
                     listening = false
-                elseif not listening
-                    and input.UserInputType == Enum.UserInputType.Keyboard
-                    and input.KeyCode.Name == keyName then
+                    return
+                end
 
-                    if callback then
-                        callback(keyName)
-                    end
+                if input.KeyCode.Name == keyName and callback then
+                    callback(keyName)
                 end
             end)
 
-            table.insert(self.Tab.Window.Connections, connection)
+            table.insert(self.Window.Connections, connection)
 
             return {
-                Get = function() return keyName end,
+                Get = function()
+                    return keyName
+                end,
+
                 Set = function(newKey)
                     keyName = newKey
-                    button.Text = newKey
+                    keyButton.Text = newKey
                 end
             }
         end
 
-        -- Section-Methode zurückgeben
         table.insert(self.Sections, section)
         return section
     end
@@ -735,61 +772,85 @@ function Arcane:CreateTab(name)
     return tab
 end
 
--- Benachrichtigung
-function Arcane:Notify(title, message, duration)
+--==================================================
+-- NOTIFICATIONS
+--==================================================
+
+function Arcane:Notify(titleText, messageText, duration)
     duration = duration or 3
 
-    local notification = Create("Frame", {
+    local note = create("Frame", {
         AnchorPoint = Vector2.new(1, 0),
         Position = UDim2.new(1, -20, 0, 20),
-        Size = UDim2.fromOffset(290, 82),
-        BackgroundColor3 = Theme.Panel,
+        Size = UDim2.fromOffset(290, 80),
+        BackgroundColor3 = T.Panel,
         BorderSizePixel = 0,
         ZIndex = 20
     }, self.Gui)
 
-    Corner(notification, 9)
-    Stroke(notification, Theme.Accent)
+    corner(note, 9)
+    stroke(note)
 
-    local titleLabel = MakeLabel(notification, title or "Arcane", 14,
-        Theme.Text, Enum.Font.GothamBold)
-    titleLabel.Position = UDim2.fromOffset(12, 8)
-    titleLabel.Size = UDim2.new(1, -24, 0, 23)
+    create("Frame", {
+        Size = UDim2.new(0, 4, 1, 0),
+        BackgroundColor3 = T.Accent,
+        BorderSizePixel = 0,
+        ZIndex = 21
+    }, note)
 
-    local messageLabel = Create("TextLabel", {
+    local heading = create("TextLabel", {
+        Position = UDim2.fromOffset(15, 8),
+        Size = UDim2.new(1, -25, 0, 24),
         BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(12, 33),
-        Size = UDim2.new(1, -24, 0, 37),
-        Text = message or "",
+        Text = titleText or "Arcane",
+        TextSize = 14,
+        TextColor3 = T.Text,
+        Font = Enum.Font.GothamBold,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ZIndex = 21
+    }, note)
+
+    local message = create("TextLabel", {
+        Position = UDim2.fromOffset(15, 33),
+        Size = UDim2.new(1, -25, 0, 38),
+        BackgroundTransparency = 1,
+        Text = messageText or "",
         TextWrapped = true,
         TextSize = 11,
-        TextColor3 = Theme.Muted,
+        TextColor3 = T.Muted,
         Font = Enum.Font.Gotham,
         TextXAlignment = Enum.TextXAlignment.Left,
-        TextYAlignment = Enum.TextYAlignment.Top
-    }, notification)
+        TextYAlignment = Enum.TextYAlignment.Top,
+        ZIndex = 21
+    }, note)
 
     task.delay(duration, function()
-        if notification and notification.Parent then
-            Animate(notification, {
+        if note and note.Parent then
+            TweenService:Create(note, TweenInfo.new(0.2), {
                 BackgroundTransparency = 1,
-                Position = notification.Position + UDim2.fromOffset(0, -8)
-            }, 0.2)
+                Position = note.Position + UDim2.fromOffset(0, -8)
+            }):Play()
 
             task.wait(0.22)
 
-            if notification then
-                notification:Destroy()
+            if note and note.Parent then
+                note:Destroy()
             end
         end
     end)
 
-    return notification
+    return note
 end
 
--- Fenster schließen und Verbindungen aufräumen
+--==================================================
+-- CLEANUP
+--==================================================
+
 function Arcane:Destroy()
-    if self.Destroyed then return end
+    if self.Destroyed then
+        return
+    end
+
     self.Destroyed = true
 
     for _, connection in ipairs(self.Connections) do
@@ -803,53 +864,53 @@ function Arcane:Destroy()
     end
 end
 
--- =====================================================
--- BEISPIEL-UI
--- Diese Oberfläche wird direkt mit diesem Code erstellt.
--- =====================================================
+--==================================================
+-- DEMO UI
+--==================================================
 
 local Window = Arcane.new({
+    Name = "ArcaneUI",
     Title = "ARCANE",
     Subtitle = "Custom Interface",
     Size = UDim2.fromOffset(760, 490)
 })
 
 local Home = Window:CreateTab("Home")
-local MainSection = Home:CreateSection("Allgemein")
+local Main = Home:CreateSection("Allgemein")
 
-MainSection:AddToggle("Beispiel-Toggle", false, function(enabled)
-    print("Toggle:", enabled)
+Main:AddToggle("Beispiel-Toggle", false, function(value)
+    print("Toggle:", value)
 end)
 
-MainSection:AddButton("Test-Benachrichtigung", function()
+Main:AddButton("Benachrichtigung testen", function()
     Window:Notify("Arcane", "Die UI funktioniert!", 3)
 end)
 
-MainSection:AddTextBox("Textfeld", "Text hier eingeben...", function(text)
-    print("Eingegebener Text:", text)
+Main:AddTextBox("Textfeld", "Text eingeben...", function(value)
+    print("Text:", value)
 end)
 
-MainSection:AddSlider("Beispiel-Slider", 0, 100, 50, function(value)
-    print("Slider-Wert:", value)
+Main:AddSlider("Beispiel-Slider", 0, 100, 50, function(value)
+    print("Slider:", value)
 end)
 
-MainSection:AddDropdown("Beispiel-Dropdown", {
+Main:AddDropdown("Beispiel-Dropdown", {
     "Option 1",
     "Option 2",
     "Option 3"
-}, function(option)
-    print("Ausgewählt:", option)
+}, function(value)
+    print("Auswahl:", value)
 end)
 
-MainSection:AddKeybind("Beispiel-Keybind", "RightShift", function(key)
+Main:AddKeybind("Beispiel-Keybind", "RightShift", function(key)
     print("Taste gedrückt:", key)
 end)
 
 local Settings = Window:CreateTab("Settings")
 local SettingsSection = Settings:CreateSection("Einstellungen")
 
-SettingsSection:AddToggle("Beispiel-Einstellung", true, function(enabled)
-    print("Einstellung:", enabled)
+SettingsSection:AddToggle("Beispiel-Einstellung", true, function(value)
+    print("Einstellung:", value)
 end)
 
 SettingsSection:AddButton("UI schließen", function()
