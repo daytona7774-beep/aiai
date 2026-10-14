@@ -1,7 +1,7 @@
 
 --==================================================
--- ARCANE UI - STANDALONE
--- Roblox LocalScript
+-- ARCANE UI - FIXED STANDALONE VERSION
+-- Für Roblox Studio: als LocalScript ausführen
 --==================================================
 
 local Players = game:GetService("Players")
@@ -10,7 +10,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
 if not player then
-    error("Arcane UI muss in einem LocalScript laufen.")
+    error("Arcane UI benötigt einen Roblox LocalScript.")
 end
 
 local playerGui = player:WaitForChild("PlayerGui")
@@ -31,10 +31,10 @@ Arcane.Theme = {
 
 local T = Arcane.Theme
 
-local function create(className, props, parent)
+local function create(className, properties, parent)
     local object = Instance.new(className)
 
-    for key, value in pairs(props or {}) do
+    for key, value in pairs(properties or {}) do
         object[key] = value
     end
 
@@ -55,7 +55,7 @@ local function stroke(object)
     }, object)
 end
 
-local function padding(object, amount)
+local function addPadding(object, amount)
     create("UIPadding", {
         PaddingLeft = UDim.new(0, amount),
         PaddingRight = UDim.new(0, amount),
@@ -64,7 +64,7 @@ local function padding(object, amount)
     }, object)
 end
 
-local function label(parent, text, size, color, font)
+local function makeLabel(parent, text, size, color, font)
     return create("TextLabel", {
         BackgroundTransparency = 1,
         Text = text or "",
@@ -77,7 +77,7 @@ local function label(parent, text, size, color, font)
     }, parent)
 end
 
-local function button(parent, text, size)
+local function makeButton(parent, text, size)
     local b = create("TextButton", {
         AutoButtonColor = false,
         Text = text or "",
@@ -107,27 +107,30 @@ local function button(parent, text, size)
 end
 
 --==================================================
--- WINDOW
+-- FENSTER
 --==================================================
 
 function Arcane.new(options)
     options = options or {}
 
     local self = setmetatable({}, Arcane)
+
     self.Tabs = {}
     self.Connections = {}
     self.ActiveTab = nil
     self.Destroyed = false
 
-    local old = playerGui:FindFirstChild(options.Name or "ArcaneUI")
-    if old then
-        old:Destroy()
+    local existing = playerGui:FindFirstChild(options.Name or "ArcaneUI")
+    if existing then
+        existing:Destroy()
     end
 
     self.Gui = create("ScreenGui", {
         Name = options.Name or "ArcaneUI",
         ResetOnSpawn = false,
         IgnoreGuiInset = true,
+
+        -- Sibling wurde entfernt:
         ZIndexBehavior = Enum.ZIndexBehavior.Global
     }, playerGui)
 
@@ -151,16 +154,17 @@ function Arcane.new(options)
         BorderSizePixel = 0
     }, main)
 
-    local title = label(
+    local title = makeLabel(
         topbar,
         "  ✦  " .. (options.Title or "ARCANE"),
         16,
         T.Text,
         Enum.Font.GothamBold
     )
+
     title.Position = UDim2.fromOffset(0, -5)
 
-    local subtitle = create("TextLabel", {
+    create("TextLabel", {
         BackgroundTransparency = 1,
         Position = UDim2.fromOffset(18, 28),
         Size = UDim2.new(1, -75, 0, 16),
@@ -171,7 +175,12 @@ function Arcane.new(options)
         TextXAlignment = Enum.TextXAlignment.Left
     }, topbar)
 
-    local close = button(topbar, "×", UDim2.fromOffset(32, 32))
+    local close = makeButton(
+        topbar,
+        "×",
+        UDim2.fromOffset(32, 32)
+    )
+
     close.Position = UDim2.new(1, -42, 0, 11)
     close.TextSize = 22
 
@@ -187,7 +196,7 @@ function Arcane.new(options)
         BorderSizePixel = 0
     }, main)
 
-    padding(sidebar, 10)
+    addPadding(sidebar, 10)
 
     local tabList = create("ScrollingFrame", {
         Name = "TabList",
@@ -205,7 +214,7 @@ function Arcane.new(options)
         SortOrder = Enum.SortOrder.LayoutOrder
     }, tabList)
 
-    local content = create("Frame", {
+    self.Content = create("Frame", {
         Name = "Content",
         Position = UDim2.new(0, 170, 0, 55),
         Size = UDim2.new(1, -170, 1, -55),
@@ -214,14 +223,13 @@ function Arcane.new(options)
         ClipsDescendants = true
     }, main)
 
-    self.Content = content
     self.TabList = tabList
 
     -- Fenster verschieben
     local dragging = false
-    local dragInput
     local dragStart
     local startPosition
+    local dragInput
 
     topbar.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1
@@ -265,14 +273,15 @@ function Arcane.new(options)
 end
 
 --==================================================
--- TAB
+-- TABS
 --==================================================
 
 function Arcane:SelectTab(selected)
     self.ActiveTab = selected
 
     for _, tab in ipairs(self.Tabs) do
-        tab.Page.Visible = (tab == selected)
+        tab.Page.Visible = tab == selected
+
         tab.Button.BackgroundColor3 =
             tab == selected and T.Accent or T.Element
     end
@@ -285,11 +294,12 @@ function Arcane:CreateTab(name)
         Window = self
     }
 
-    tab.Button = button(
+    tab.Button = makeButton(
         self.TabList,
         "   " .. name,
         UDim2.new(1, 0, 0, 36)
     )
+
     tab.Button.TextXAlignment = Enum.TextXAlignment.Left
 
     tab.Page = create("ScrollingFrame", {
@@ -304,7 +314,7 @@ function Arcane:CreateTab(name)
         Visible = false
     }, self.Content)
 
-    padding(tab.Page, 14)
+    addPadding(tab.Page, 14)
 
     create("UIListLayout", {
         Padding = UDim.new(0, 12),
@@ -322,7 +332,7 @@ function Arcane:CreateTab(name)
     end
 
     --==================================================
-    -- SECTION
+    -- SECTIONS
     --==================================================
 
     function tab:CreateSection(sectionName)
@@ -341,14 +351,14 @@ function Arcane:CreateTab(name)
 
         corner(frame, 9)
         stroke(frame)
-        padding(frame, 12)
+        addPadding(frame, 12)
 
         create("UIListLayout", {
             Padding = UDim.new(0, 8),
             SortOrder = Enum.SortOrder.LayoutOrder
         }, frame)
 
-        local heading = create("TextLabel", {
+        create("TextLabel", {
             Name = "Heading",
             Size = UDim2.new(1, 0, 0, 24),
             BackgroundTransparency = 1,
@@ -362,7 +372,7 @@ function Arcane:CreateTab(name)
 
         section.Frame = frame
 
-        local function makeRow(height, order)
+        local function row(height, order)
             return create("Frame", {
                 Size = UDim2.new(1, 0, 0, height),
                 BackgroundTransparency = 1,
@@ -373,8 +383,8 @@ function Arcane:CreateTab(name)
 
         -- TOGGLE
         function section:AddToggle(text, default, callback)
-            local row = makeRow(32)
-            local caption = label(row, text, 12, T.Text)
+            local r = row(32)
+            local caption = makeLabel(r, text, 12, T.Text)
             caption.Size = UDim2.new(1, -55, 1, 0)
 
             local switch = create("TextButton", {
@@ -384,7 +394,7 @@ function Arcane:CreateTab(name)
                 Text = "",
                 AutoButtonColor = false,
                 BorderSizePixel = 0
-            }, row)
+            }, r)
 
             corner(switch, 11)
 
@@ -401,6 +411,7 @@ function Arcane:CreateTab(name)
 
             local function update(notify)
                 switch.BackgroundColor3 = value and T.Accent or T.Element
+
                 knob.Position = value
                     and UDim2.new(1, -19, 0.5, -8)
                     or UDim2.new(0, 3, 0.5, -8)
@@ -421,6 +432,7 @@ function Arcane:CreateTab(name)
                 Get = function()
                     return value
                 end,
+
                 Set = function(newValue)
                     value = newValue == true
                     update(true)
@@ -430,7 +442,12 @@ function Arcane:CreateTab(name)
 
         -- BUTTON
         function section:AddButton(text, callback)
-            local b = button(frame, text, UDim2.new(1, 0, 0, 34))
+            local b = makeButton(
+                frame,
+                text,
+                UDim2.new(1, 0, 0, 34)
+            )
+
             b.LayoutOrder = 10
 
             b.MouseButton1Click:Connect(function()
@@ -444,9 +461,9 @@ function Arcane:CreateTab(name)
 
         -- TEXTBOX
         function section:AddTextBox(text, placeholder, callback)
-            local row = makeRow(58)
+            local r = row(58)
 
-            local caption = label(row, text, 12, T.Text)
+            local caption = makeLabel(r, text, 12, T.Text)
             caption.Size = UDim2.new(1, 0, 0, 20)
 
             local input = create("TextBox", {
@@ -461,10 +478,10 @@ function Arcane:CreateTab(name)
                 Font = Enum.Font.Gotham,
                 ClearTextOnFocus = false,
                 BorderSizePixel = 0
-            }, row)
+            }, r)
 
             corner(input, 6)
-            padding(input, 8)
+            addPadding(input, 8)
 
             input.FocusLost:Connect(function(enterPressed)
                 if callback then
@@ -485,9 +502,9 @@ function Arcane:CreateTab(name)
                 maxValue
             )
 
-            local row = makeRow(54)
+            local r = row(54)
 
-            local caption = label(row, text, 12, T.Text)
+            local caption = makeLabel(r, text, 12, T.Text)
             caption.Size = UDim2.new(0.75, 0, 0, 22)
 
             local number = create("TextLabel", {
@@ -499,7 +516,7 @@ function Arcane:CreateTab(name)
                 TextSize = 12,
                 Font = Enum.Font.GothamBold,
                 TextXAlignment = Enum.TextXAlignment.Right
-            }, row)
+            }, r)
 
             local bar = create("TextButton", {
                 Position = UDim2.fromOffset(0, 31),
@@ -508,7 +525,7 @@ function Arcane:CreateTab(name)
                 Text = "",
                 AutoButtonColor = false,
                 BorderSizePixel = 0
-            }, row)
+            }, r)
 
             corner(bar, 4)
 
@@ -588,6 +605,7 @@ function Arcane:CreateTab(name)
                 Get = function()
                     return value
                 end,
+
                 Set = function(newValue)
                     setValue(newValue, true)
                 end
@@ -598,15 +616,15 @@ function Arcane:CreateTab(name)
         function section:AddDropdown(text, options, callback)
             options = options or {}
 
-            local row = makeRow(61)
+            local r = row(61)
 
-            local caption = label(row, text, 12, T.Text)
+            local caption = makeLabel(r, text, 12, T.Text)
             caption.Size = UDim2.new(1, 0, 0, 20)
 
             local selected = options[1]
 
-            local drop = button(
-                row,
+            local drop = makeButton(
+                r,
                 selected and tostring(selected) or "Option wählen",
                 UDim2.new(1, 0, 0, 32)
             )
@@ -622,29 +640,25 @@ function Arcane:CreateTab(name)
                 Visible = false,
                 ClipsDescendants = true,
                 ZIndex = 5
-            }, row)
+            }, r)
 
             corner(menu, 6)
             stroke(menu)
 
-            local menuLayout = create("UIListLayout", {
+            create("UIListLayout", {
                 Padding = UDim.new(0, 3),
                 SortOrder = Enum.SortOrder.LayoutOrder
             }, menu)
 
-            local function clearOptions()
+            local function rebuild()
                 for _, child in ipairs(menu:GetChildren()) do
                     if child:IsA("TextButton") then
                         child:Destroy()
                     end
                 end
-            end
-
-            local function rebuild()
-                clearOptions()
 
                 for _, option in ipairs(options) do
-                    local optionButton = button(
+                    local optionButton = makeButton(
                         menu,
                         tostring(option),
                         UDim2.new(1, 0, 0, 28)
@@ -657,7 +671,7 @@ function Arcane:CreateTab(name)
                         drop.Text = tostring(option)
                         menu.Visible = false
                         menu.Size = UDim2.new(1, 0, 0, 0)
-                        row.Size = UDim2.new(1, 0, 0, 61)
+                        r.Size = UDim2.new(1, 0, 0, 61)
 
                         if callback then
                             callback(option)
@@ -674,10 +688,10 @@ function Arcane:CreateTab(name)
                 if menu.Visible then
                     local height = math.min(#options * 31, 155)
                     menu.Size = UDim2.new(1, 0, 0, height)
-                    row.Size = UDim2.new(1, 0, 0, 67 + height)
+                    r.Size = UDim2.new(1, 0, 0, 67 + height)
                 else
                     menu.Size = UDim2.new(1, 0, 0, 0)
-                    row.Size = UDim2.new(1, 0, 0, 61)
+                    r.Size = UDim2.new(1, 0, 0, 61)
                 end
             end)
 
@@ -712,15 +726,15 @@ function Arcane:CreateTab(name)
 
         -- KEYBIND
         function section:AddKeybind(text, defaultKey, callback)
-            local row = makeRow(34)
+            local r = row(34)
 
-            local caption = label(row, text, 12, T.Text)
+            local caption = makeLabel(r, text, 12, T.Text)
             caption.Size = UDim2.new(1, -105, 1, 0)
 
             local keyName = defaultKey or "RightShift"
 
-            local keyButton = button(
-                row,
+            local keyButton = makeButton(
+                r,
                 keyName,
                 UDim2.fromOffset(100, 30)
             )
@@ -773,7 +787,7 @@ function Arcane:CreateTab(name)
 end
 
 --==================================================
--- NOTIFICATIONS
+-- BENACHRICHTIGUNG
 --==================================================
 
 function Arcane:Notify(titleText, messageText, duration)
@@ -798,7 +812,7 @@ function Arcane:Notify(titleText, messageText, duration)
         ZIndex = 21
     }, note)
 
-    local heading = create("TextLabel", {
+    create("TextLabel", {
         Position = UDim2.fromOffset(15, 8),
         Size = UDim2.new(1, -25, 0, 24),
         BackgroundTransparency = 1,
@@ -810,7 +824,7 @@ function Arcane:Notify(titleText, messageText, duration)
         ZIndex = 21
     }, note)
 
-    local message = create("TextLabel", {
+    create("TextLabel", {
         Position = UDim2.fromOffset(15, 33),
         Size = UDim2.new(1, -25, 0, 38),
         BackgroundTransparency = 1,
@@ -843,7 +857,7 @@ function Arcane:Notify(titleText, messageText, duration)
 end
 
 --==================================================
--- CLEANUP
+-- AUFRÄUMEN
 --==================================================
 
 function Arcane:Destroy()
@@ -865,7 +879,7 @@ function Arcane:Destroy()
 end
 
 --==================================================
--- DEMO UI
+-- BEISPIEL-UI
 --==================================================
 
 local Window = Arcane.new({
