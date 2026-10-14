@@ -31,13 +31,21 @@ Arcane.Theme = {
 local T = Arcane.Theme
 
 local function create(className, properties, parent)
+    assert(
+        Instance ~= nil,
+        "Instance ist nil: Dieses Script muss in einer Roblox-LuaU-Umgebung laufen."
+    )
+
     local object = Instance.new(className)
 
     for key, value in pairs(properties or {}) do
         object[key] = value
     end
 
-    object.Parent = parent
+    if parent then
+        object.Parent = parent
+    end
+
     return object
 end
 
