@@ -1,0 +1,861 @@
+
+--[[
+    ARCANE UI - STANDALONE EDITION
+    Vollständige UI-Bibliothek in einer Datei.
+    Enthält: Window, Tabs, Sections, Toggle, Button,
+    TextBox, Slider, Dropdown, Keybind und Notifications.
+    Keine Spielmanipulation.
+]]
+
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+local Arcane = {}
+Arcane.__index = Arcane
+
+Arcane.Theme = {
+    Background = Color3.fromRGB(17, 18, 25),
+    Sidebar = Color3.fromRGB(21, 22, 31),
+    Panel = Color3.fromRGB(27, 29, 40),
+    Element = Color3.fromRGB(35, 37, 51),
+    Accent = Color3.fromRGB(139, 92, 246),
+    Text = Color3.fromRGB(240, 240, 250),
+    Muted = Color3.fromRGB(155, 158, 180),
+    Border = Color3.fromRGB(52, 54, 72),
+    Success = Color3.fromRGB(80, 200, 130),
+    Danger = Color3.fromRGB(235, 85, 100)
+}
+
+local Theme = Arcane.Theme
+
+local function Create(className, properties, parent)
+    local object = Instance.new(className)
+
+    for property, value in pairs(properties or {}) do
+        object[property] = value
+    end
+
+    object.Parent = parent
+    return object
+end
+
+local function Corner(parent, radius)
+    return Create("UICorner", {
+        CornerRadius = UDim.new(0, radius or 8)
+    }, parent)
+end
+
+local function Stroke(parent, color, transparency)
+    return Create("UIStroke", {
+        Color = color or Theme.Border,
+        Transparency = transparency or 0,
+        Thickness = 1
+    }, parent)
+end
+
+local function Padding(parent, amount)
+    return Create("UIPadding", {
+        PaddingLeft = UDim.new(0, amount),
+        PaddingRight = UDim.new(0, amount),
+        PaddingTop = UDim.new(0, amount),
+        PaddingBottom = UDim.new(0, amount)
+    }, parent)
+end
+
+local function Animate(object, properties, duration)
+    TweenService:Create(
+        object,
+        TweenInfo.new(duration or 0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+        properties
+    ):Play()
+end
+
+local function MakeLabel(parent, text, size, color, font)
+    return Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Text = text or "",
+        TextSize = size or 13,
+        TextColor3 = color or Theme.Text,
+        Font = font or Enum.Font.Gotham,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Center,
+        Size = UDim2.new(1, 0, 1, 0)
+    }, parent)
+end
+
+local function MakeButton(parent, text, size, color)
+    local button = Create("TextButton", {
+        AutoButtonColor = false,
+        Text = text or "",
+        TextSize = 13,
+        Font = Enum.Font.GothamMedium,
+        TextColor3 = Theme.Text,
+        BackgroundColor3 = color or Theme.Element,
+        Size = size,
+        BorderSizePixel = 0
+    }, parent)
+
+    Corner(button, 7)
+
+    button.MouseEnter:Connect(function()
+        Animate(button, {
+            BackgroundColor3 = Theme.Accent
+        })
+    end)
+
+    button.MouseLeave:Connect(function()
+        Animate(button, {
+            BackgroundColor3 = color or Theme.Element
+        })
+    end)
+
+    return button
+end
+
+-- Fenster erstellen
+function Arcane.new(options)
+    options = options or {}
+
+    local self = setmetatable({}, Arcane)
+    self.Tabs = {}
+    self.ActiveTab = nil
+    self.Connections = {}
+    self.Destroyed = false
+
+    local gui = Create("ScreenGui", {
+        Name = options.Name or "ArcaneUI",
+        ResetOnSpawn = false,
+        ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    }, PlayerGui)
+
+    self.Gui = gui
+
+    local main = Create("Frame", {
+        Name = "Main",
+        Size = options.Size or UDim2.fromOffset(760, 490),
+        Position = UDim2.new(0.5, -380, 0.5, -245),
+        BackgroundColor3 = Theme.Background,
+        BorderSizePixel = 0,
+        ClipsDescendants = true
+    }, gui)
+
+    self.Main = main
+    Corner(main, 12)
+    Stroke(main, Theme.Border)
+
+    -- Kopfzeile
+    local topbar = Create("Frame", {
+        Name = "Topbar",
+        Size = UDim2.new(1, 0, 0, 54),
+        BackgroundColor3 = Theme.Panel,
+        BorderSizePixel = 0
+    }, main)
+
+    MakeLabel(topbar, "  ✦  " .. (options.Title or "ARCANE"), 17,
+        Theme.Text, Enum.Font.GothamBold)
+
+    local subtitle = Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 18, 0, 29),
+        Size = UDim2.new(1, -90, 0, 15),
+        Text = options.Subtitle or "UI Framework",
+        TextSize = 10,
+        TextColor3 = Theme.Muted,
+        Font = Enum.Font.Gotham,
+        TextXAlignment = Enum.TextXAlignment.Left
+    }, topbar)
+
+    local close = MakeButton(topbar, "×",
+        UDim2.fromOffset(34, 32), Theme.Panel)
+    close.Position = UDim2.new(1, -43, 0, 11)
+    close.TextSize = 22
+
+    close.MouseButton1Click:Connect(function()
+        self:Destroy()
+    end)
+
+    -- Sidebar
+    local sidebar = Create("Frame", {
+        Name = "Sidebar",
+        Position = UDim2.new(0, 0, 0, 54),
+        Size = UDim2.new(0, 175, 1, -54),
+        BackgroundColor3 = Theme.Sidebar,
+        BorderSizePixel = 0
+    }, main)
+
+    Padding(sidebar, 12)
+
+    local tabList = Create("ScrollingFrame", {
+        Name = "TabList",
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 1, 0),
+        CanvasSize = UDim2.new(),
+        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        ScrollBarThickness = 3,
+        ScrollBarImageColor3 = Theme.Accent,
+        BorderSizePixel = 0
+    }, sidebar)
+
+    Create("UIListLayout", {
+        Padding = UDim.new(0, 7),
+        SortOrder = Enum.SortOrder.LayoutOrder
+    }, tabList)
+
+    -- Inhaltsbereich
+    local content = Create("Frame", {
+        Name = "Content",
+        Position = UDim2.new(0, 175, 0, 54),
+        Size = UDim2.new(1, -175, 1, -54),
+        BackgroundColor3 = Theme.Background,
+        BorderSizePixel = 0,
+        ClipsDescendants = true
+    }, main)
+
+    self.Content = content
+    self.TabList = tabList
+
+    -- Fenster verschieben
+    local dragging = false
+    local dragStart
+    local startPosition
+
+    topbar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPosition = main.Position
+        end
+    end)
+
+    local dragConnection = UserInputService.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local delta = input.Position - dragStart
+
+            main.Position = UDim2.new(
+                startPosition.X.Scale,
+                startPosition.X.Offset + delta.X,
+                startPosition.Y.Scale,
+                startPosition.Y.Offset + delta.Y
+            )
+        end
+    end)
+
+    local releaseConnection = UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+
+    table.insert(self.Connections, dragConnection)
+    table.insert(self.Connections, releaseConnection)
+
+    return self
+end
+
+-- Tab auswählen
+function Arcane:SelectTab(tab)
+    self.ActiveTab = tab
+
+    for _, item in ipairs(self.Tabs) do
+        item.Page.Visible = item == tab
+        Animate(item.Button, {
+            BackgroundColor3 = item == tab and Theme.Accent or Theme.Element,
+            TextColor3 = Theme.Text
+        })
+    end
+end
+
+-- Neuen Tab erstellen
+function Arcane:CreateTab(name)
+    local tab = {
+        Name = name,
+        Sections = {}
+    }
+
+    local button = MakeButton(
+        self.TabList,
+        "   " .. name,
+        UDim2.new(1, 0, 0, 37),
+        Theme.Element
+    )
+
+    button.TextXAlignment = Enum.TextXAlignment.Left
+    button.TextSize = 12
+
+    local page = Create("ScrollingFrame", {
+        Name = name .. "Page",
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ScrollBarThickness = 4,
+        ScrollBarImageColor3 = Theme.Accent,
+        CanvasSize = UDim2.new(),
+        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        Visible = false
+    }, self.Content)
+
+    Padding(page, 16)
+
+    Create("UIListLayout", {
+        Padding = UDim.new(0, 13),
+        SortOrder = Enum.SortOrder.LayoutOrder
+    }, page)
+
+    tab.Button = button
+    tab.Page = page
+    tab.Window = self
+
+    button.MouseButton1Click:Connect(function()
+        self:SelectTab(tab)
+    end)
+
+    table.insert(self.Tabs, tab)
+
+    if not self.ActiveTab then
+        self:SelectTab(tab)
+    end
+
+    function tab:CreateSection(title)
+        local section = {
+            Name = title,
+            Tab = self
+        }
+
+        local frame = Create("Frame", {
+            Name = title,
+            Size = UDim2.new(1, -2, 0, 45),
+            AutomaticSize = Enum.AutomaticSize.Y,
+            BackgroundColor3 = Theme.Panel,
+            BorderSizePixel = 0
+        }, self.Page)
+
+        Corner(frame, 9)
+        Stroke(frame, Theme.Border)
+        Padding(frame, 12)
+
+        local layout = Create("UIListLayout", {
+            Padding = UDim.new(0, 9),
+            SortOrder = Enum.SortOrder.LayoutOrder
+        }, frame)
+
+        local heading = Create("TextLabel", {
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, 0, 0, 24),
+            Text = title,
+            TextSize = 14,
+            TextColor3 = Theme.Text,
+            Font = Enum.Font.GothamBold,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            LayoutOrder = 0
+        }, frame)
+
+        section.Frame = frame
+
+        local function Row(height)
+            local row = Create("Frame", {
+                Size = UDim2.new(1, 0, 0, height or 34),
+                BackgroundTransparency = 1,
+                BorderSizePixel = 0
+            }, frame)
+
+            return row
+        end
+
+        -- Toggle
+        function section:AddToggle(label, default, callback)
+            local row = Row(34)
+            local text = MakeLabel(row, label, 12, Theme.Text)
+            text.Size = UDim2.new(1, -55, 1, 0)
+
+            local toggle = Create("TextButton", {
+                Size = UDim2.fromOffset(42, 23),
+                Position = UDim2.new(1, -42, 0.5, -11),
+                BackgroundColor3 = Theme.Element,
+                Text = "",
+                AutoButtonColor = false,
+                BorderSizePixel = 0
+            }, row)
+
+            Corner(toggle, 12)
+
+            local knob = Create("Frame", {
+                Size = UDim2.fromOffset(17, 17),
+                Position = UDim2.new(0, 3, 0.5, -8),
+                BackgroundColor3 = Theme.Text,
+                BorderSizePixel = 0
+            }, toggle)
+
+            Corner(knob, 10)
+
+            local value = default == true
+
+            local function update()
+                Animate(toggle, {
+                    BackgroundColor3 = value and Theme.Accent or Theme.Element
+                })
+
+                Animate(knob, {
+                    Position = value
+                        and UDim2.new(1, -20, 0.5, -8)
+                        or UDim2.new(0, 3, 0.5, -8)
+                })
+
+                if callback then
+                    callback(value)
+                end
+            end
+
+            toggle.MouseButton1Click:Connect(function()
+                value = not value
+                update()
+            end)
+
+            update()
+
+            return {
+                Get = function() return value end,
+                Set = function(newValue)
+                    value = newValue == true
+                    update()
+                end
+            }
+        end
+
+        -- Button
+        function section:AddButton(label, callback)
+            local button = MakeButton(
+                frame,
+                label,
+                UDim2.new(1, 0, 0, 35),
+                Theme.Element
+            )
+
+            button.LayoutOrder = 100
+            button.MouseButton1Click:Connect(function()
+                if callback then
+                    callback()
+                end
+            end)
+
+            return button
+        end
+
+        -- TextBox
+        function section:AddTextBox(label, placeholder, callback)
+            local row = Row(58)
+
+            local text = MakeLabel(row, label, 12, Theme.Text)
+            text.Size = UDim2.new(1, 0, 0, 21)
+
+            local input = Create("TextBox", {
+                Position = UDim2.new(0, 0, 0, 25),
+                Size = UDim2.new(1, 0, 0, 32),
+                BackgroundColor3 = Theme.Element,
+                TextColor3 = Theme.Text,
+                PlaceholderColor3 = Theme.Muted,
+                PlaceholderText = placeholder or "Text eingeben...",
+                Text = "",
+                TextSize = 12,
+                Font = Enum.Font.Gotham,
+                ClearTextOnFocus = false,
+                BorderSizePixel = 0
+            }, row)
+
+            Corner(input, 6)
+            Padding(input, 8)
+
+            input.FocusLost:Connect(function(enterPressed)
+                if callback then
+                    callback(input.Text, enterPressed)
+                end
+            end)
+
+            return input
+        end
+
+        -- Slider
+        function section:AddSlider(label, minValue, maxValue, defaultValue, callback)
+            minValue = minValue or 0
+            maxValue = maxValue or 100
+            defaultValue = math.clamp(defaultValue or minValue, minValue, maxValue)
+
+            local row = Row(56)
+
+            local title = MakeLabel(row, label, 12, Theme.Text)
+            title.Size = UDim2.new(0.75, 0, 0, 22)
+
+            local valueLabel = Create("TextLabel", {
+                BackgroundTransparency = 1,
+                Position = UDim2.new(0.75, 0, 0, 0),
+                Size = UDim2.new(0.25, 0, 0, 22),
+                Text = tostring(defaultValue),
+                TextColor3 = Theme.Accent,
+                TextSize = 12,
+                Font = Enum.Font.GothamBold,
+                TextXAlignment = Enum.TextXAlignment.Right
+            }, row)
+
+            local bar = Create("Frame", {
+                Position = UDim2.new(0, 0, 0, 34),
+                Size = UDim2.new(1, 0, 0, 7),
+                BackgroundColor3 = Theme.Element,
+                BorderSizePixel = 0
+            }, row)
+
+            Corner(bar, 5)
+
+            local fill = Create("Frame", {
+                Size = UDim2.new(
+                    (defaultValue - minValue) / math.max(maxValue - minValue, 1),
+                    0, 1, 0
+                ),
+                BackgroundColor3 = Theme.Accent,
+                BorderSizePixel = 0
+            }, bar)
+
+            Corner(fill, 5)
+
+            local value = defaultValue
+            local sliding = false
+
+            local function setFromX(x)
+                local ratio = math.clamp(
+                    (x - bar.AbsolutePosition.X) / bar.AbsoluteSize.X,
+                    0, 1
+                )
+
+                value = math.floor(minValue + ratio * (maxValue - minValue) + 0.5)
+
+                fill.Size = UDim2.new(ratio, 0, 1, 0)
+                valueLabel.Text = tostring(value)
+
+                if callback then
+                    callback(value)
+                end
+            end
+
+            bar.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                    sliding = true
+                    setFromX(input.Position.X)
+                end
+            end)
+
+            local moveConnection = UserInputService.InputChanged:Connect(function(input)
+                if sliding and input.UserInputType == Enum.UserInputType.MouseMovement then
+                    setFromX(input.Position.X)
+                end
+            end)
+
+            local endConnection = UserInputService.InputEnded:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                    sliding = false
+                end
+            end)
+
+            table.insert(self.Tab.Window.Connections, moveConnection)
+            table.insert(self.Tab.Window.Connections, endConnection)
+
+            return {
+                Get = function() return value end,
+                Set = function(newValue)
+                    value = math.clamp(newValue, minValue, maxValue)
+                    local ratio = (value - minValue) / math.max(maxValue - minValue, 1)
+                    fill.Size = UDim2.new(ratio, 0, 1, 0)
+                    valueLabel.Text = tostring(value)
+                    if callback then callback(value) end
+                end
+            }
+        end
+
+        -- Dropdown
+        function section:AddDropdown(label, options, callback)
+            options = options or {}
+
+            local row = Row(62)
+
+            local title = MakeLabel(row, label, 12, Theme.Text)
+            title.Size = UDim2.new(1, 0, 0, 22)
+
+            local selected = options[1] or "Keine Optionen"
+
+            local button = MakeButton(
+                row,
+                tostring(selected) .. "  ▾",
+                UDim2.new(1, 0, 0, 34),
+                Theme.Element
+            )
+
+            button.Position = UDim2.new(0, 0, 0, 25)
+            button.TextXAlignment = Enum.TextXAlignment.Left
+            Padding(button, 8)
+
+            local menu = Create("Frame", {
+                Position = UDim2.new(0, 0, 0, 61),
+                Size = UDim2.new(1, 0, 0, 0),
+                BackgroundColor3 = Theme.Background,
+                BorderSizePixel = 0,
+                ClipsDescendants = true,
+                Visible = false,
+                ZIndex = 5
+            }, row)
+
+            Corner(menu, 6)
+            Stroke(menu, Theme.Border)
+
+            local list = Create("UIListLayout", {
+                Padding = UDim.new(0, 3)
+            }, menu)
+
+            local function rebuild()
+                for _, child in ipairs(menu:GetChildren()) do
+                    if child:IsA("TextButton") then
+                        child:Destroy()
+                    end
+                end
+
+                for _, option in ipairs(options) do
+                    local optionButton = MakeButton(
+                        menu,
+                        tostring(option),
+                        UDim2.new(1, 0, 0, 28),
+                        Theme.Element
+                    )
+
+                    optionButton.ZIndex = 6
+                    optionButton.MouseButton1Click:Connect(function()
+                        selected = option
+                        button.Text = tostring(option) .. "  ▾"
+                        menu.Visible = false
+                        menu.Size = UDim2.new(1, 0, 0, 0)
+
+                        if callback then
+                            callback(option)
+                        end
+                    end)
+                end
+            end
+
+            rebuild()
+
+            button.MouseButton1Click:Connect(function()
+                menu.Visible = not menu.Visible
+
+                if menu.Visible then
+                    menu.Size = UDim2.new(1, 0, 0, math.min(#options * 31, 155))
+                    row.Size = UDim2.new(1, 0, 0, 67 + math.min(#options * 31, 155))
+                else
+                    menu.Size = UDim2.new(1, 0, 0, 0)
+                    row.Size = UDim2.new(1, 0, 0, 62)
+                end
+            end)
+
+            return {
+                Get = function() return selected end,
+                Set = function(newValue)
+                    for _, option in ipairs(options) do
+                        if option == newValue then
+                            selected = newValue
+                            button.Text = tostring(selected) .. "  ▾"
+                            if callback then callback(selected) end
+                            break
+                        end
+                    end
+                end,
+                Refresh = function(newOptions)
+                    options = newOptions or {}
+                    selected = options[1] or "Keine Optionen"
+                    button.Text = tostring(selected) .. "  ▾"
+                    rebuild()
+                end
+            }
+        end
+
+        -- Keybind
+        function section:AddKeybind(label, defaultKey, callback)
+            local row = Row(34)
+
+            local title = MakeLabel(row, label, 12, Theme.Text)
+            title.Size = UDim2.new(1, -100, 1, 0)
+
+            local keyName = defaultKey or "RightShift"
+
+            local button = MakeButton(
+                row,
+                keyName,
+                UDim2.fromOffset(95, 30),
+                Theme.Element
+            )
+
+            button.Position = UDim2.new(1, -95, 0, 2)
+            local listening = false
+
+            button.MouseButton1Click:Connect(function()
+                listening = true
+                button.Text = "Taste drücken..."
+            end)
+
+            local connection = UserInputService.InputBegan:Connect(function(input, processed)
+                if processed then return end
+
+                if listening and input.UserInputType == Enum.UserInputType.Keyboard then
+                    keyName = input.KeyCode.Name
+                    button.Text = keyName
+                    listening = false
+                elseif not listening
+                    and input.UserInputType == Enum.UserInputType.Keyboard
+                    and input.KeyCode.Name == keyName then
+
+                    if callback then
+                        callback(keyName)
+                    end
+                end
+            end)
+
+            table.insert(self.Tab.Window.Connections, connection)
+
+            return {
+                Get = function() return keyName end,
+                Set = function(newKey)
+                    keyName = newKey
+                    button.Text = newKey
+                end
+            }
+        end
+
+        -- Section-Methode zurückgeben
+        table.insert(self.Sections, section)
+        return section
+    end
+
+    return tab
+end
+
+-- Benachrichtigung
+function Arcane:Notify(title, message, duration)
+    duration = duration or 3
+
+    local notification = Create("Frame", {
+        AnchorPoint = Vector2.new(1, 0),
+        Position = UDim2.new(1, -20, 0, 20),
+        Size = UDim2.fromOffset(290, 82),
+        BackgroundColor3 = Theme.Panel,
+        BorderSizePixel = 0,
+        ZIndex = 20
+    }, self.Gui)
+
+    Corner(notification, 9)
+    Stroke(notification, Theme.Accent)
+
+    local titleLabel = MakeLabel(notification, title or "Arcane", 14,
+        Theme.Text, Enum.Font.GothamBold)
+    titleLabel.Position = UDim2.fromOffset(12, 8)
+    titleLabel.Size = UDim2.new(1, -24, 0, 23)
+
+    local messageLabel = Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Position = UDim2.fromOffset(12, 33),
+        Size = UDim2.new(1, -24, 0, 37),
+        Text = message or "",
+        TextWrapped = true,
+        TextSize = 11,
+        TextColor3 = Theme.Muted,
+        Font = Enum.Font.Gotham,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Top
+    }, notification)
+
+    task.delay(duration, function()
+        if notification and notification.Parent then
+            Animate(notification, {
+                BackgroundTransparency = 1,
+                Position = notification.Position + UDim2.fromOffset(0, -8)
+            }, 0.2)
+
+            task.wait(0.22)
+
+            if notification then
+                notification:Destroy()
+            end
+        end
+    end)
+
+    return notification
+end
+
+-- Fenster schließen und Verbindungen aufräumen
+function Arcane:Destroy()
+    if self.Destroyed then return end
+    self.Destroyed = true
+
+    for _, connection in ipairs(self.Connections) do
+        pcall(function()
+            connection:Disconnect()
+        end)
+    end
+
+    if self.Gui then
+        self.Gui:Destroy()
+    end
+end
+
+-- =====================================================
+-- BEISPIEL-UI
+-- Diese Oberfläche wird direkt mit diesem Code erstellt.
+-- =====================================================
+
+local Window = Arcane.new({
+    Title = "ARCANE",
+    Subtitle = "Custom Interface",
+    Size = UDim2.fromOffset(760, 490)
+})
+
+local Home = Window:CreateTab("Home")
+local MainSection = Home:CreateSection("Allgemein")
+
+MainSection:AddToggle("Beispiel-Toggle", false, function(enabled)
+    print("Toggle:", enabled)
+end)
+
+MainSection:AddButton("Test-Benachrichtigung", function()
+    Window:Notify("Arcane", "Die UI funktioniert!", 3)
+end)
+
+MainSection:AddTextBox("Textfeld", "Text hier eingeben...", function(text)
+    print("Eingegebener Text:", text)
+end)
+
+MainSection:AddSlider("Beispiel-Slider", 0, 100, 50, function(value)
+    print("Slider-Wert:", value)
+end)
+
+MainSection:AddDropdown("Beispiel-Dropdown", {
+    "Option 1",
+    "Option 2",
+    "Option 3"
+}, function(option)
+    print("Ausgewählt:", option)
+end)
+
+MainSection:AddKeybind("Beispiel-Keybind", "RightShift", function(key)
+    print("Taste gedrückt:", key)
+end)
+
+local Settings = Window:CreateTab("Settings")
+local SettingsSection = Settings:CreateSection("Einstellungen")
+
+SettingsSection:AddToggle("Beispiel-Einstellung", true, function(enabled)
+    print("Einstellung:", enabled)
+end)
+
+SettingsSection:AddButton("UI schließen", function()
+    Window:Destroy()
+end)
+
+Window:Notify("Willkommen", "Arcane UI wurde geladen.", 3)
+
+return Window
