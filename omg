@@ -128,7 +128,7 @@ function Arcane.new(options)
         Name = options.Name or "ArcaneUI",
         ResetOnSpawn = false,
         IgnoreGuiInset = true,
-        ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        ZIndexBehavior = Enum.ZIndexBehavior.Global
     }, playerGui)
 
     local main = create("Frame", {
